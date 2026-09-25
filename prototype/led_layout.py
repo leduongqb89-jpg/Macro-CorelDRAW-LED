@@ -27,6 +27,8 @@ class Cfg:
     row_gap = 10.0  # khe ho giua 2 hang
     step = 2.0      # buoc do duong bao
     corner = 25.0   # goc (do) coi la goc gay
+    stagger = True  # so le kieu gach
+    cn, rn = 3, 1   # so bong LED: theo chieu dai x chieu rong
 
 
 # ---------- Hinh chu nhat xoay ----------
@@ -198,11 +200,14 @@ class Layout:
                     else:
                         led = (cx, cy, hl, hw, ux, uy)
                 rows.setdefault(k, []).append((i, led))
-        phase = None
         self.run_id = getattr(self, "run_id", 0) + 1
+        phase0 = None
         for k in sorted(rows):
             self.cur_seq = (self.run_id, k)
-            phase = self.place_row(rows[k], ps, phase)
+            ph = None if phase0 is None else phase0 + (k % 2) * (ps // 2 if self.cfg.stagger else 0)
+            used = self.place_row(rows[k], ps, ph)
+            if phase0 is None and used is not None:
+                phase0 = used - (k % 2) * (ps // 2 if self.cfg.stagger else 0)
 
     def ok(self, led):
         return all(not sat_overlap(o, led, self.clear) for o in self.leds) and self.fits_shape(led)
