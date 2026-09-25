@@ -63,6 +63,7 @@ class Engine:
         self.axis = sym_axis
         self.step = step
         self.leds = []                                  # (cx, cy, ux, uy)
+        self.tags = []                                  # nguon goc tung LED
         self.hl, self.hw = t.L / 2, t.W / 2
         m = t.margin
         self.core_c = prep(shape.buffer(-(m + min(self.hl, self.hw)) + 0.3))  # tam LED hop le (tho)
@@ -99,14 +100,14 @@ class Engine:
     def free(self, led, leds=None):
         leds = self.leds if leds is None else leds
         if self.t.kind == "dot":
-            lim = max(self.t.L + self.t.min_gap, 0.88 * self.t.P) ** 2
+            lim = max(self.t.L + self.t.min_gap, 0.85 * min(self.t.P, self.pitch_v)) ** 2
             return all((led[0] - o[0]) ** 2 + (led[1] - o[1]) ** 2 >= lim for o in leds)
         return all(not sat_close(o, led, self.hl, self.hw, self.t.min_gap) for o in leds)
 
     def side_ok(self, led):
         return self.axis is None or led[0] <= self.axis + 0.3 * self.pitch_u
 
-    def add(self, led):
+    def add(self, led, tag=""):
         if self.axis is not None and abs(led[0] - self.axis) < 0.3 * self.pitch_u:
             # dat dung truc doi xung; module tren truc phai nam ngang hoac dung
             ux, uy = led[2], led[3]
@@ -118,6 +119,7 @@ class Engine:
         if not self.side_ok(led) or not self.free(led) or not self.fits(led):
             return False
         self.leds.append(led)
+        self.tags.append(tag)
         return True
 
     # ------------------------------------------------------------ doan bien
@@ -162,10 +164,62 @@ class Engine:
                         if len(idx) >= 4:
                             segs.append((idx, False))
                 for idx, closed in segs:
+                    # K21: doan tron (khong goc gay) giu lien mach, KHONG tach thang/cong
                     out.append(self.make_run([pts[k] for k in idx], closed))
         out = [r for r in out if r is not None]
-        # Q2: doan thang dai truoc, roi doan cong dai
-        out.sort(key=lambda r: -r.length * (1.15 if r.straight else 1.0))
+        # Q2/K19: doan thang truoc (dai truoc), roi doan cong (dai truoc)
+        out.sort(key=lambda r: (0 if r.straight else 1, -r.length))
+        return out
+
+    def split_flat(self, pts, closed):
+        """Tach 1 doan bien thanh cac khuc thang (du dai) va khuc cong."""
+        n = len(pts)
+        if n < 12:
+            return [(pts, closed)]
+        w = 5
+        def ang(i):
+            a = pts[(i - 1) % n] if closed else pts[max(0, i - 1)]
+            b = pts[(i + 1) % n] if closed else pts[min(n - 1, i + 1)]
+            return math.atan2(b[1] - a[1], b[0] - a[0])
+        A = [ang(i) for i in range(n)]
+        flat = []
+        for i in range(n):
+            lo, hi = (i - w, i + w) if closed else (max(0, i - w), min(n - 1, i + w))
+            flat.append(abs(math.degrees(math.remainder(A[hi % n] - A[lo % n], 2 * math.pi))) < 3.0)
+        min_len = max(1.2 * self.pitch_u, 30.0) / self.step
+        # cac khuc thang du dai
+        spans, i = [], 0
+        order = list(range(n))
+        while i < n:
+            if flat[i]:
+                j = i
+                while j + 1 < n and flat[j + 1]:
+                    j += 1
+                if j - i + 1 >= min_len:
+                    spans.append((i, j))
+                i = j + 1
+            else:
+                i += 1
+        if not spans:
+            return [(pts, closed)]
+        if closed and len(spans) == 1 and spans[0] == (0, n - 1):
+            return [(pts, True)]
+        out, prev = [], None
+        # doan cong nam giua cac khuc thang (tinh vong neu khep kin)
+        bounds = spans
+        for k, (a, b) in enumerate(bounds):
+            out.append((pts[a:b + 1], False))
+            na = bounds[(k + 1) % len(bounds)][0] if (closed or k + 1 < len(bounds)) else None
+            if k + 1 < len(bounds):
+                seg = pts[b:bounds[k + 1][0] + 1]
+            elif closed:
+                seg = pts[b:] + pts[:bounds[0][0] + 1]
+            else:
+                seg = pts[b:]
+            if len(seg) >= 4:
+                out.append((seg, False))
+        if not closed and bounds[0][0] > 3:
+            out.append((pts[:bounds[0][0] + 1], False))
         return out
 
     def make_run(self, pts, closed):
@@ -200,9 +254,10 @@ class Engine:
         if avail < 0.5 * self.pitch_v:
             return [D / 2]
         best = None
+        min_p = (self.t.W + self.t.min_gap) if self.t.kind == "module" else max(self.t.L + self.t.min_gap, 0.86 * min(self.t.P, self.pitch_v))
         for n in range(2, 80):
             p = avail / (n - 1)
-            if p < (self.t.W if self.t.kind == "module" else self.t.L) + self.t.min_gap:
+            if p < min_p:
                 break
             err = abs(p - self.pitch_v)
             if best is None or err < best[0]:
@@ -239,13 +294,15 @@ class Engine:
         # lay khuc lien tuc chua giua doan
         s_lo, s_hi = contiguous(ss, 2.0, 0.0)
         stg = self.use_stagger(len(offs))
-        if self.t.kind == "dot" and sn >= 0.7:
+        if self.t.kind == "dot" and sn >= 0.8:
             # Q4: hang ngang chung
+            vert = sn > 0.985
             for k, o in enumerate(offs):
                 for y in self.rows_y:
                     s = (y - (ay + vy * o)) / uy
                     if s_lo - self.pitch_u <= s <= s_hi + self.pitch_u:
-                        self.add((ax + ux * s + vx * o, y, ux, uy))
+                        if self.add((ax + ux * s + vx * o, y, ux, uy), "row") and vert:
+                            self._vert_x = getattr(self, "_vert_x", []) + [self.leds[-1][0]]
             return
         if self.t.kind == "dot" and sn < 0.3:
             # net gan nam ngang: moi hang ngang chung nam lot trong net la 1 ray
@@ -263,7 +320,7 @@ class Engine:
                 for x in cx:
                     s = (x - (ax + vx * o)) / ux if abs(ux) > 1e-6 else None
                     if s is not None:
-                        self.add((x, ay + uy * s + vy * o, ux, uy))
+                        self.add((x, ay + uy * s + vy * o, ux, uy), "row")
             return
         # luoi theo net: cac LED thang hang vuong goc voi net, chia deu doc net
         span = s_hi - s_lo
@@ -322,7 +379,7 @@ class Engine:
         if getattr(self, "_cols", None) is not None:
             return self._cols
         x0, y0, x1, y1 = self.bounds
-        xs = sorted(l[0] for l in self.leds)
+        xs = sorted(getattr(self, "_vert_x", []))
         cols = None
         if len(xs) > 4:
             # gom cac cot da co
@@ -332,12 +389,12 @@ class Engine:
                     groups[-1].append(x)
                 else:
                     groups.append([x])
-            cxs = [sum(g) / len(g) for g in groups if len(g) >= 3]
+            cxs = [sum(g) / len(g) for g in groups if len(g) >= 2]
             self._known_cols = cxs
-            if len(cxs) >= 2:
+            if len(cxs) >= 1:
                 diffs = sorted(b - a for a, b in zip(cxs, cxs[1:]) if b - a < 1.5 * self.pitch_u)
-                if diffs:
-                    p = diffs[len(diffs) // 2]
+                if True:
+                    p = diffs[len(diffs) // 2] if diffs else self.pitch_u
                     a = cxs[0]
                     k0 = int((a - x0) / p) + 1
                     cols = [a - k * p for k in range(k0, 0, -1)] + [a + k * p for k in range(int((x1 - a) / p) + 2)]
@@ -351,42 +408,98 @@ class Engine:
 
     # ------------------------------------------------------------ net cong (Q5)
     def curved_run(self, r):
+        """K24: net doi be rong -> so vong doi theo doan; moi doan xep deu, neo 2 dau."""
         n = len(r.pts)
-        D = r.med
-        offs_med = self.tracks(D)
-        if not offs_med:
+        if n < 4:
             return
-        ntr = len(offs_med)
-        for k in range(ntr):
-            line = []
-            for i in range(n):
-                d = min(r.dep[i], D * 1.05)
-                o = self.tracks(d)
-                if len(o) != ntr:
-                    o = [x * d / D for x in offs_med]      # co gian theo be rong
-                ok = o[k]
-                line.append((r.pts[i][0] + r.nrm[i][0] * ok, r.pts[i][1] + r.nrm[i][1] * ok))
-            # cat thanh cac khuc hop le
-            valid = [self.core_c.contains(Point(p)) for p in line]
-            pieces, cur = [], []
-            for p, v in zip(line, valid):
-                if v:
-                    cur.append(p)
-                elif cur:
-                    pieces.append(cur); cur = []
-            if cur:
-                if pieces and r.closed and valid[0]:
-                    pieces[0] = cur + pieces[0]
-                else:
-                    pieces.append(cur)
-            loop = r.closed and all(valid)
-            for pc in pieces:
-                self.place_on_polyline(pc, loop and len(pieces) == 1, k)
+        # be rong da lam tron (loc trung vi) de so vong khong nhay lien tuc
+        w = 7
+        dsm = []
+        for i in range(n):
+            win = [r.dep[(i + j) % n] if r.closed else r.dep[min(n - 1, max(0, i + j))] for j in range(-w, w + 1)]
+            dsm.append(sorted(win)[len(win) // 2])
+        cap = r.med * 1.35                       # tia xuyen sang net khac
+        dsm = [min(d, cap) for d in dsm]
+        cnt = [len(self.tracks(d)) for d in dsm]
+        # gop doan qua ngan vao doan ben canh
+        min_len = max(3, int(1.6 * self.pitch_u / self.step))
+        changed = True
+        while changed:
+            changed = False
+            segs = []
+            i = 0
+            while i < n:
+                j = i
+                while j + 1 < n and cnt[j + 1] == cnt[i]:
+                    j += 1
+                segs.append([i, j])
+                i = j + 1
+            if r.closed and len(segs) > 1 and cnt[0] == cnt[-1]:
+                segs[0][0] = segs[-1][0] - n
+                segs.pop()
+            for a, b in segs:
+                if b - a + 1 < min_len and len(segs) > 1:
+                    prev = cnt[(a - 1) % n] if (r.closed or a > 0) else cnt[(b + 1) % n]
+                    for q in range(a, b + 1):
+                        if cnt[q % n] != prev:
+                            cnt[q % n] = prev
+                            changed = True
+                    if changed:
+                        break
+        segs = []
+        i = 0
+        while i < n:
+            j = i
+            while j + 1 < n and cnt[j + 1] == cnt[i]:
+                j += 1
+            segs.append((i, j))
+            i = j + 1
+        whole_loop = r.closed and len(set(cnt)) == 1
+        if r.closed and len(segs) > 1 and cnt[0] == cnt[-1]:
+            a0, b0 = segs[0]; a1, b1 = segs[-1]
+            segs = [(a1 - n, b0)] + segs[1:-1]
+        clear2 = (0.9 * self.pitch_u) ** 2 if self.t.kind == "dot" else (self.hl + self.hw + self.t.min_gap) ** 2
+        def free_pt(p):
+            return all((p[0] - l[0]) ** 2 + (p[1] - l[1]) ** 2 >= clear2 for l in self.leds)
+        for a, b in segs:
+            idx = [q % n for q in range(a, b + 1)]
+            ntr = cnt[idx[0]]
+            for k in range(ntr):
+                line = []
+                for i in idx:
+                    o = self.tracks(dsm[i])
+                    if len(o) != ntr:
+                        e0 = self.tracks(r.med)[0] if self.tracks(r.med) else dsm[i] / 2
+                        o = [e0 + q * (dsm[i] - 2 * e0) / (ntr - 1) for q in range(ntr)] if ntr > 1 else [dsm[i] / 2]
+                    line.append((r.pts[i][0] + r.nrm[i][0] * o[k], r.pts[i][1] + r.nrm[i][1] * o[k]))
+                valid = [self.core_c.contains(Point(p)) and free_pt(p) for p in line]
+                pieces, cur = [], []
+                for p, v in zip(line, valid):
+                    if v:
+                        cur.append(p)
+                    elif cur:
+                        pieces.append(cur); cur = []
+                if cur:
+                    if pieces and whole_loop and valid[0]:
+                        pieces[0] = cur + pieces[0]
+                    else:
+                        pieces.append(cur)
+                loop = whole_loop and all(valid)
+                for pc in pieces:
+                    self.place_on_polyline(pc, loop and len(pieces) == 1, k)
 
     def place_on_polyline(self, pc, loop, k):
         if len(pc) < 2:
             return
         if loop:
+            # K22: bat dau chia tu diem tren truc doi xung (dinh vong) / diem cao nhat
+            if self.axis is not None:
+                top = max(range(len(pc)), key=lambda i: pc[i][1] - 50 * abs(pc[i][0] - self.axis))
+            else:
+                top = max(range(len(pc)), key=lambda i: pc[i][1])
+            pc = pc[top:] + pc[:top]
+            if self.axis is not None:
+                pc[0] = (self.axis, pc[0][1])
             pc = pc + [pc[0]]
         acc = [0.0]
         for a, b in zip(pc, pc[1:]):
@@ -416,7 +529,7 @@ class Engine:
                 a = at(pc, acc, max(0, s - 1)); b = at(pc, acc, min(Lp, s + 1))
                 ux, uy = b[0] - a[0], b[1] - a[1]
             d = math.hypot(ux, uy) or 1
-            self.add((c[0], c[1], ux / d, uy / d))
+            self.add((c[0], c[1], ux / d, uy / d), "curve")
 
     # ------------------------------------------------------------ lap cho toi (Q8)
     def fill_dark(self, thr=1.2):
@@ -462,10 +575,13 @@ class Engine:
 
     # ------------------------------------------------------------ chay
     def anchor_rows(self, runs):
-        """Q8: hang ngang neo vao moi mep nam ngang (cach mep e), giua 2 neo chia deu."""
+        """Q8/K13: hang ngang cho ca chu.
+        Uu tien 1 buoc deu p (+-12% quanh P) va 1 pha phi sao cho moi mep ngang
+        deu co hang LED cach mep trong [e, e + dung sai]. Khong duoc thi neo tung doan."""
+        import numpy as np
         x0, y0, x1, y1 = self.bounds
         e = self.t.margin + self.hw
-        anchors = [y0 + e, y1 - e]
+        edges = [(y0, 1), (y1, -1)]
         for r in runs:
             if not r.straight or r.length < 0.8 * self.pitch_u:
                 continue
@@ -473,17 +589,51 @@ class Engine:
             vx, vy = r.nrm[len(r.nrm) // 2]
             if abs(uy) < 0.12 and r.med >= 2 * e:
                 yb = sum(p[1] for p in r.pts) / len(r.pts)
-                anchors.append(yb + (e if vy > 0 else -e))
-        anchors = sorted(a for a in anchors if y0 + e - 1 <= a <= y1 - e + 1)
+                edges.append((yb, 1 if vy > 0 else -1))
+        P = self.pitch_v
+        min_p = max(self.t.L + self.t.min_gap, 0.78 * self.t.P)
+        tol = 0.18 * P
+        best = None
+        for p in np.arange(max(min_p, 0.78 * P), 1.22 * P + 1e-9, 0.25):
+            for phi in np.arange(0, p, 0.25):
+                cost = 0.0
+                worst = 0.0
+                for ye, sg in edges:
+                    if sg > 0:
+                        k = math.ceil((ye + e - 0.3 - phi) / p)
+                        d = phi + k * p - ye
+                    else:
+                        k = math.floor((ye - e + 0.3 - phi) / p)
+                        d = ye - (phi + k * p)
+                    ex = max(0.0, d - e - tol)
+                    cost += ex * ex + 0.02 * (d - e)
+                    worst = max(worst, d - e)
+                cost += 0.5 * (p - P) ** 2 / P
+                if best is None or cost < best[0]:
+                    best = (cost, p, phi, worst)
+        if best is not None and best[3] <= tol + 0.5:
+            _, p, phi, _ = best
+            self.row_pitch = p
+            # cot/ray cung co gian theo buoc hang da chon de luoi vuong
+            self.pitch_u = self.pitch_v = p
+            k0 = math.floor((y0 - phi) / p)
+            self.rows_y = [phi + k * p for k in range(k0, k0 + int((y1 - y0) / p) + 3)
+                           if y0 + e - 0.5 <= phi + k * p <= y1 - e + 0.5]
+            return
+        # khong co buoc deu phu hop: neo tung doan
+        anchors = sorted(ye + sg * e for ye, sg in edges)
+        anchors = [a for a in anchors if y0 + e - 1 <= a <= y1 - e + 1]
         merged = []
         for a in anchors:
-            if merged and a - merged[-1] < 0.45 * self.pitch_v:
+            if merged and a - merged[-1] < 0.45 * P:
                 merged[-1] = (merged[-1] + a) / 2
             else:
                 merged.append(a)
         rows = [merged[0]]
         for a, b in zip(merged, merged[1:]):
-            n = max(1, round((b - a) / self.pitch_v))
+            n = max(1, round((b - a) / P))
+            while n > 1 and (b - a) / n < min_p:
+                n -= 1
             rows += [a + k * (b - a) / n for k in range(1, n + 1)]
         self.rows_y = rows
 
@@ -503,10 +653,71 @@ class Engine:
         if self.do_fill:
             self.fill_dark()
         if self.axis is not None:
-            left = [l for l in self.leds if l[0] < self.axis - 0.01]
-            for x, y, ux, uy in left:
+            left = [(l, tg) for l, tg in zip(self.leds, self.tags) if l[0] < self.axis - 0.01]
+            for (x, y, ux, uy), tg in left:
                 self.leds.append((2 * self.axis - x, y, -ux, uy))
+                self.tags.append(tg)
+        if self.t.kind == "dot":
+            self.smooth_rows()
         return self.leds
+
+    def smooth_rows(self):
+        """K17: tren moi hang ngang, doan LED bi day/thua bat thuong duoc chia deu lai
+        giua 2 LED tot o 2 dau. LED da thang cot giu nguyen."""
+        p = self.pitch_u
+        rows = {}
+        others = [l for l, tg in zip(self.leds, self.tags) if tg != "row"]
+        for l, tg in zip(self.leds, self.tags):
+            if tg == "row":
+                rows.setdefault(round(l[1] * 2) / 2, []).append(l)
+        out = []
+        for y, row in rows.items():
+            row.sort(key=lambda l: l[0])
+            if len(row) < 3:
+                out += row
+                continue
+            # tach theo khoang trong chu (doan noi 2 LED phai nam trong chu)
+            groups, cur = [], [row[0]]
+            for a, b in zip(row, row[1:]):
+                mid_ok = all(self.inside(a[0] + (b[0] - a[0]) * f, y) for f in (0.25, 0.5, 0.75))
+                if mid_ok and b[0] - a[0] < 2.2 * p:
+                    cur.append(b)
+                else:
+                    groups.append(cur); cur = [b]
+            groups.append(cur)
+            for g in groups:
+                if len(g) < 3:
+                    out += g
+                    continue
+                gaps = [b[0] - a[0] for a, b in zip(g, g[1:])]
+                bad = [not (0.84 * p <= d <= 1.2 * p) for d in gaps]
+                keep = [True] * len(g)
+                newpts = []
+                i = 0
+                while i < len(gaps):
+                    if not bad[i]:
+                        i += 1
+                        continue
+                    j = i
+                    while j + 1 < len(gaps) and bad[j + 1]:
+                        j += 1
+                    a, b = i, j + 1                   # LED neo 2 dau (giu nguyen)
+                    xa, xb = g[a][0], g[b][0]
+                    n = max(1, round((xb - xa) / p))
+                    while n > 1 and (xb - xa) / n < 0.84 * p:
+                        n -= 1
+                    for k in range(a + 1, b):
+                        keep[k] = False
+                    ux, uy = g[a][2], g[a][3]
+                    for k in range(1, n):
+                        newpts.append((xa + k * (xb - xa) / n, y, ux, uy))
+                    i = j + 1
+                out += [l for l, kp in zip(g, keep) if kp]
+                for l in newpts:
+                    if self.fits(l) and self.free(l, others):
+                        out.append(l)
+        self.leds = out + others
+        self.tags = ["row"] * len(out) + ["other"] * len(others)
 
 
 # ------------------------------------------------------------------ tien ich
