@@ -1,24 +1,24 @@
-Attribute VB_Name = "RaiLED"
+Attribute VB_Name = "AutoLEDPro"
 '====================================================================
-'  MACRO RAI LED TU DONG CHO CORELDRAW (X7 / 2017 / 2018 ... 2024)
+'  AUTOLED PRO - RAI LED TU DONG CHO CORELDRAW (X7 / 2017 / 2018 ... 2024)
 '
 '  Cach dung nhanh:
 '    1. Chon chu (text hoac da convert to curves), co the chon ca group.
-'    2. Chay macro "RaiLED".
+'    2. Chay macro "AutoLED_Fill".
 '    3. LED duoc tao tren layer "LED", moi chu la 1 group rieng.
 '
 '  Cac macro co trong module:
-'    RaiLED   - rai LED vao cac doi tuong dang chon
-'    DemLED   - dem so LED (trong vung chon, hoac ca layer LED)
-'    XoaLED   - xoa toan bo LED tren layer LED cua trang hien tai
-'    CaiDat   - thay doi thong so ma khong rai LED
+'    AutoLED_Fill     - rai LED vao cac doi tuong dang chon
+'    AutoLED_Count    - dem so LED (trong vung chon, hoac ca layer LED)
+'    AutoLED_Clear    - xoa toan bo LED tren layer LED cua trang hien tai
+'    AutoLED_Settings - thay doi thong so ma khong rai LED
 '
 '  LED mau tuy chinh: ve 1 doi tuong bat ky (hinh module, hat LED...),
 '  dat ten (Object Manager) la  LED_MAU  -> macro se dung hinh do.
 '====================================================================
 Option Explicit
 
-Private Const APP_NAME As String = "RaiLED"
+Private Const APP_NAME As String = "AutoLED Pro"
 Private Const LAYER_NAME As String = "LED"
 Private Const SAMPLE_NAME As String = "LED_MAU"
 Private Const LED_NAME As String = "LED"
@@ -45,7 +45,7 @@ Private ptsX() As Double, ptsY() As Double, ptsN As Long
 '====================================================================
 '  MACRO CHINH
 '====================================================================
-Public Sub RaiLED()
+Public Sub AutoLED_Fill()
     Dim oldUnit As cdrUnit, sel As ShapeRange, leaves As ShapeRange
     Dim lyr As Layer, total As Long, i As Long, errMsg As String
 
@@ -120,7 +120,7 @@ End Sub
 '--------------------------------------------------------------------
 ' Dem LED: trong vung chon (neu co) hoac tren layer LED cua trang
 '--------------------------------------------------------------------
-Public Sub DemLED()
+Public Sub AutoLED_Count()
     Dim n As Long, lyr As Layer
     If ActiveDocument Is Nothing Then Exit Sub
     LoadCfg
@@ -136,7 +136,7 @@ End Sub
 '--------------------------------------------------------------------
 ' Xoa toan bo LED tren layer LED cua trang hien tai
 '--------------------------------------------------------------------
-Public Sub XoaLED()
+Public Sub AutoLED_Clear()
     Dim lyr As Layer
     If ActiveDocument Is Nothing Then Exit Sub
     Set lyr = FindLayer(LAYER_NAME)
@@ -155,7 +155,7 @@ End Sub
 '--------------------------------------------------------------------
 ' Chi thay doi thong so
 '--------------------------------------------------------------------
-Public Sub CaiDat()
+Public Sub AutoLED_Settings()
     LoadCfg
     AskCfg False
 End Sub

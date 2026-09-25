@@ -1,21 +1,21 @@
-# Macro CorelDRAW rải LED tự động
+# AutoLED Pro: rải LED tự động cho CorelDRAW
 
 Macro này tự động xếp LED (LED hạt hoặc LED module) vào trong chữ để đi gia công chữ nổi và hộp đèn. Bạn không phải xếp tay từng con nữa.
 
 ## Cài đặt (làm một lần)
 
-1. Tải file **`RaiLED.bas`** về máy.
+1. Tải file **`AutoLEDPro.bas`** về máy.
 2. Mở CorelDRAW, bấm **Alt + F11** (hoặc vào *Tools → Macros → Macro Editor*).
-3. Ở khung bên trái, bấm chuột phải vào **GlobalMacros (GlobalMacros.gms)** → **Import File…** → chọn `RaiLED.bas`.
+3. Ở khung bên trái, bấm chuột phải vào **GlobalMacros (GlobalMacros.gms)** → **Import File…** → chọn `AutoLEDPro.bas`.
 4. Bấm **Save** rồi đóng Macro Editor.
-5. *(Nên làm)* Gắn macro vào nút hoặc phím tắt: *Tools → Options → Customization → Commands*, chọn **Macros** trong danh sách, rồi kéo `RaiLED.RaiLED` lên thanh công cụ hoặc gán phím tắt.
+5. *(Nên làm)* Gắn macro vào nút hoặc phím tắt: *Tools → Options → Customization → Commands*, chọn **Macros** trong danh sách, rồi kéo `AutoLEDPro.AutoLED_Fill` lên thanh công cụ hoặc gán phím tắt.
 
 > Nếu không thấy mục Macro, bạn cần cài thêm thành phần **VBA** khi cài CorelDRAW.
 
 ## Cách dùng
 
 1. Chọn các chữ cần rải LED. Được chọn chữ thường (text), chữ đã Convert to Curves hoặc cả group.
-2. Chạy macro **`RaiLED`**.
+2. Chạy macro **`AutoLED_Fill`**.
 3. Một bảng hiện ra cho biết thông số đang dùng:
    - **YES**: rải LED ngay
    - **NO**: nhập lại thông số
@@ -28,10 +28,10 @@ Macro đặt LED lên một layer riêng tên **`LED`**, mỗi chữ là một g
 
 | Macro | Chức năng |
 |---|---|
-| `RaiLED` | Rải LED vào các chữ đang chọn |
-| `DemLED` | Đếm LED trong vùng chọn. Nếu không chọn gì thì đếm cả layer LED. Kèm công suất và nguồn |
-| `XoaLED` | Xóa toàn bộ LED trên layer LED của trang hiện tại |
-| `CaiDat` | Chỉ đổi thông số, không rải LED |
+| `AutoLED_Fill` | Rải LED vào các chữ đang chọn |
+| `AutoLED_Count` | Đếm LED trong vùng chọn. Nếu không chọn gì thì đếm cả layer LED. Kèm công suất và nguồn |
+| `AutoLED_Clear` | Xóa toàn bộ LED trên layer LED của trang hiện tại |
+| `AutoLED_Settings` | Chỉ đổi thông số, không rải LED |
 
 ## Thông số
 
