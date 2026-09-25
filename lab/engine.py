@@ -105,10 +105,30 @@ class Engine:
         return all(not sat_close(o, led, self.hl, self.hw, self.t.min_gap) for o in leds)
 
     def side_ok(self, led):
-        return self.axis is None or led[0] <= self.axis + 0.3 * self.pitch_u
+        if self.axis is None:
+            return True
+        if self.t.kind == "dot":
+            return led[0] <= self.axis + 0.3 * self.pitch_u
+        if abs(led[0] - self.axis) < 1e-6:
+            return True                                   # module nam dung giua truc
+        xs = [c[0] for c in corners(led[0], led[1], self.hl, self.hw, led[2], led[3])]
+        return max(xs) <= self.axis - self.t.min_gap / 2  # K26: khong vat qua truc
+
+    def snap(self, led):
+        """Dat LED gan truc doi xung vao dung truc (module: nam ngang hoac dung)."""
+        snap = 0.3 * self.pitch_u if self.t.kind == "dot" else 0.3 * self.pitch_v
+        if self.axis is not None and abs(led[0] - self.axis) < snap:
+            ux, uy = led[2], led[3]
+            if abs(ux) > abs(uy):
+                ux, uy = 1.0, 0.0
+            else:
+                ux, uy = 0.0, 1.0
+            return (self.axis, led[1], ux, uy)
+        return led
 
     def add(self, led, tag=""):
-        if self.axis is not None and abs(led[0] - self.axis) < 0.3 * self.pitch_u:
+        snap = 0.3 * self.pitch_u if self.t.kind == "dot" else 0.3 * self.pitch_v
+        if self.axis is not None and abs(led[0] - self.axis) < snap:
             # dat dung truc doi xung; module tren truc phai nam ngang hoac dung
             ux, uy = led[2], led[3]
             if abs(ux) > abs(uy):
@@ -116,11 +136,20 @@ class Engine:
             else:
                 ux, uy = 0.0, 1.0
             led = (self.axis, led[1], ux, uy)
-        if not self.side_ok(led) or not self.free(led) or not self.fits(led):
+        if not self.side_ok(led):
             return False
-        self.leds.append(led)
-        self.tags.append(tag)
-        return True
+        cands = [led]
+        if self.t.kind == "module" and tag == "curve":
+            # K28: module tren net cong duoc nhich vao trong vai mm de tranh mep cong
+            vx, vy = -led[3], led[2]
+            for d in (1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 4.0, -4.0):
+                cands.append((led[0] + vx * d, led[1] + vy * d, led[2], led[3]))
+        for c in cands:
+            if self.fits(c) and self.free(c) and self.side_ok(c):
+                self.leds.append(c)
+                self.tags.append(tag)
+                return True
+        return False
 
     # ------------------------------------------------------------ doan bien
     def depth(self, x, y, vx, vy):
@@ -322,6 +351,9 @@ class Engine:
                     if s is not None:
                         self.add((x, ay + uy * s + vy * o, ux, uy), "row")
             return
+        if self.t.kind == "module":
+            self.straight_modules(r, ax, ay, ux, uy, vx, vy, offs, sn)
+            return
         # luoi theo net: cac LED thang hang vuong goc voi net, chia deu doc net
         span = s_hi - s_lo
         pitch = self.pitch_u if self.t.kind == "dot" else self.pitch_u
@@ -344,6 +376,50 @@ class Engine:
                     # hang module nam ngang: dich theo ray de cung do cao voi ray giua
                     s = s + (vy * (mid - o)) / uy
                 self.add((ax + ux * s + vx * o, ay + uy * s + vy * o, ux, uy))
+
+    def straight_modules(self, r, ax, ay, ux, uy, vx, vy, offs, sn):
+        """K27: module doc theo net thang. Tim khuc TU DO dai nhat (sau khi net khac da xep),
+        chia deu tam module vua khit khuc do; cac ray thang hang (hoac so le)."""
+        D = r.med
+        mid = offs[len(offs) // 2]
+        ext = D
+        # hang module nam ngang cho net xien 45-85 do
+        slanted = 0.7 <= sn <= 0.985
+        def led_at(s, o):
+            if slanted:
+                s = s + (vy * (mid - o)) / uy
+            return (ax + ux * s + vx * o, ay + uy * s + vy * o, ux, uy)
+        ok_s = []
+        for s in frange(-r.length / 2 - ext, r.length / 2 + ext, 2.0):
+            chk = [o for o in (offs[0], offs[-1], mid) if self.side_ok(self.snap(led_at(s, o)))]
+            good = bool(chk) and all(self.fits(self.snap(led_at(s, o))) and self.free(self.snap(led_at(s, o)))
+                                     for o in chk)
+            if good:
+                ok_s.append(s)
+        if not ok_s:
+            return
+        groups, cur = [], [ok_s[0]]
+        for s in ok_s[1:]:
+            if s - cur[-1] > 3.0:
+                groups.append(cur); cur = []
+            cur.append(s)
+        groups.append(cur)
+        stg = self.use_stagger(len(offs))
+        for g in sorted(groups, key=lambda g: g[0] - g[-1]):
+            s_lo, s_hi = g[0], g[-1]
+            span = s_hi - s_lo
+            min_step = self.t.L + self.t.min_gap
+            cnt = max(1, round(span / self.pitch_u) + 1)
+            while cnt > 1 and span / (cnt - 1) < min_step:
+                cnt -= 1
+            step = span / (cnt - 1) if cnt > 1 else 0
+            cols = [s_lo + (q * step if cnt > 1 else span / 2) for q in range(cnt)]
+            for k, o in enumerate(offs):
+                row = cols
+                if stg and k % 2 == 1 and cnt > 1:
+                    row = [c + step / 2 for c in cols[:-1]]
+                for s in row:
+                    self.add(led_at(s, o), "mod")
 
     def stroke_columns(self, xa, xb):
         """Cot cho 1 net ngang [xa, xb]: noi tiep cot cua net doc, phan vuon ra ngoai chia deu lai."""
@@ -458,7 +534,7 @@ class Engine:
         if r.closed and len(segs) > 1 and cnt[0] == cnt[-1]:
             a0, b0 = segs[0]; a1, b1 = segs[-1]
             segs = [(a1 - n, b0)] + segs[1:-1]
-        clear2 = (0.9 * self.pitch_u) ** 2 if self.t.kind == "dot" else (self.hl + self.hw + self.t.min_gap) ** 2
+        clear2 = (0.9 * self.pitch_u) ** 2 if self.t.kind == "dot" else (0.8 * min(self.pitch_u, self.pitch_v)) ** 2
         def free_pt(p):
             return all((p[0] - l[0]) ** 2 + (p[1] - l[1]) ** 2 >= clear2 for l in self.leds)
         for a, b in segs:
@@ -650,8 +726,8 @@ class Engine:
                 self.straight_run(r)
             else:
                 self.curved_run(r)
-        if self.do_fill:
-            self.fill_dark()
+        if self.do_fill and self.t.kind == "dot":
+            self.fill_dark()                  # K25: module khong tu lap cho toi
         if self.axis is not None:
             left = [(l, tg) for l, tg in zip(self.leds, self.tags) if l[0] < self.axis - 0.01]
             for (x, y, ux, uy), tg in left:

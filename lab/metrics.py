@@ -107,11 +107,14 @@ def score(r, t):
     s = 10.0
     s -= 3.0 * min(1, r.get("overlap", 0)) + 0.2 * r.get("overlap", 0)
     s -= 3.0 * min(1, r.get("out", 0)) + 0.2 * r.get("out", 0)
-    s -= min(3.0, max(0.0, r.get("nn_cv", 0) - 0.08) * 15)
-    s -= min(2.5, max(0.0, r.get("dark_max", 0) - 0.85) * 4)
+    mod = t.kind == "module"
+    # module: bong trong module cach deu san (cell) khac khoang qua khe -> nguong cv cao hon
+    s -= min(3.0, max(0.0, r.get("nn_cv", 0) - (0.22 if mod else 0.08)) * 15)
+    s -= min(2.5, max(0.0, r.get("dark_max", 0) - (1.15 if mod else 0.85)) * 4)
     s -= min(1.5, 0.3 * r.get("lone", 0))
     s -= min(1.5, max(0.0, r.get("ang_diff", 0) - 3) * 0.08)
-    s -= min(3.0, r.get("irr_ratio", 0) * 25)
+    if not mod:
+        s -= min(3.0, r.get("irr_ratio", 0) * 25)
     if "sym" in r:
         s -= min(2.0, (1 - r["sym"]) * 6)
     return max(0.0, round(s, 1))
