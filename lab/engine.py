@@ -391,7 +391,10 @@ class Engine:
             return (ax + ux * s + vx * o, ay + uy * s + vy * o, ux, uy)
         ok_s = []
         for s in frange(-r.length / 2 - ext, r.length / 2 + ext, 2.0):
-            chk = [o for o in (offs[0], offs[-1], mid) if self.side_ok(self.snap(led_at(s, o)))]
+            # K30: chi dung ray giua de tim khuc tu do; ray ben vuong thi bo rieng LED do
+            chk = [o for o in (mid,) if self.side_ok(self.snap(led_at(s, o)))]
+            if not chk:
+                chk = [o for o in offs if self.side_ok(self.snap(led_at(s, o)))][:1]
             good = bool(chk) and all(self.fits(self.snap(led_at(s, o))) and self.free(self.snap(led_at(s, o)))
                                      for o in chk)
             if good:

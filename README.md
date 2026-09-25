@@ -1,64 +1,86 @@
-# AutoLED Pro: rải LED tự động cho CorelDRAW
+# AutoLED Pro – rải LED tự động cho CorelDRAW
 
-Macro này tự động xếp LED (LED hạt hoặc LED module) vào trong chữ để đi gia công chữ nổi và hộp đèn. Bạn không phải xếp tay từng con nữa.
+AutoLED Pro tự động xếp LED vào trong chữ, theo tư duy của người thiết kế:
+- tách chữ thành từng nét,
+- chia đều số hàng và số cột vừa khít nét,
+- tự lật gương với chữ đối xứng,
+- không bao giờ để LED chồng nhau hay lấn mép.
 
-## Cài đặt (làm một lần)
+Kết quả gồm bản vẽ LED để **khắc lên tấm alu cho thợ dán theo**, **đường đi dây** và **file lỗ cắt** cho LED lộ hoặc tôn đục lỗ.
+
+> Phiên bản 3, viết cho **CorelDRAW 2022** (dùng được với bản 2018 trở lên).
+> Các quy tắc xếp LED được giải thích trong [KINH_NGHIEM.md](KINH_NGHIEM.md). Ảnh kết quả thử nghiệm nằm trong thư mục [`ket_qua/`](ket_qua).
+
+## Cài đặt (làm 1 lần)
 
 1. Tải file **`AutoLEDPro.bas`** về máy.
-2. Mở CorelDRAW, bấm **Alt + F11** (hoặc vào *Tools → Macros → Macro Editor*).
-3. Ở khung bên trái, bấm chuột phải vào **GlobalMacros (GlobalMacros.gms)** → **Import File…** → chọn `AutoLEDPro.bas`.
-4. Bấm **Save** rồi đóng Macro Editor.
-5. *(Nên làm)* Gắn macro vào nút hoặc phím tắt: *Tools → Options → Customization → Commands*, chọn **Macros** trong danh sách, rồi kéo `AutoLEDPro.AutoLED_Fill` lên thanh công cụ hoặc gán phím tắt.
+2. Mở CorelDRAW, bấm **Alt + F11** để mở Macro Editor.
+3. Ở khung bên trái, bấm chuột phải vào **GlobalMacros** → **Import File…** → chọn `AutoLEDPro.bas`.
+4. Đóng Macro Editor. Trong CorelDRAW, vào **Tools → Macros → Run Macro**, chọn **`AutoLED_CaiDat`**, bấm **Run**. Macro sẽ tự tạo cửa sổ giao diện.
+5. Mở lại Macro Editor (**Alt + F11**), bấm **Save** (Ctrl+S).
+6. *(Nên làm)* Gắn macro **`AutoLED`** lên thanh công cụ: **Tools → Options → Customization → Commands → Macros**.
 
-> Nếu không thấy mục Macro, bạn cần cài thêm thành phần **VBA** khi cài CorelDRAW.
+**Nếu bước 4 báo lỗi** (CorelDRAW không cho macro tự tạo cửa sổ), bạn cài tay trong Macro Editor như sau:
+1. Vào **File → Import File…** → chọn `clsAutoLEDEvt.cls`.
+2. Vào **Insert → UserForm**. Trong khung Properties, đổi **(Name)** thành `frmAutoLED`.
+3. Bấm đúp vào cửa sổ vừa tạo để mở phần code, xóa hết code có sẵn, dán toàn bộ nội dung file `frmAutoLED_code.txt` vào.
+4. Bấm **Save**.
 
-## Cách dùng
+## Sử dụng
 
-1. Chọn các chữ cần rải LED. Được chọn chữ thường (text), chữ đã Convert to Curves hoặc cả group.
-2. Chạy macro **`AutoLED_Fill`**.
-3. Một bảng hiện ra cho biết thông số đang dùng:
-   - **YES**: rải LED ngay
-   - **NO**: nhập lại thông số
-   - **CANCEL**: hủy
-4. Xong việc, bảng kết quả cho biết **tổng số LED**, **công suất** và **nguồn đề xuất**.
+1. Chọn chữ cần rải LED. Được chọn chữ thường (text), chữ đã Convert to Curves hoặc cả group. Mỗi chữ nên là một đối tượng riêng.
+2. Chạy macro **`AutoLED`**, cửa sổ cấu hình sẽ hiện ra:
+   - **1. Chọn loại LED:** có sẵn LED tròn F9, F12, module 15×65 (3 bóng), module 12×45 (2 bóng), module vuông 35×35 (4 bóng). Bạn có thể thêm, sửa, xóa LED và lưu vào thư viện (file `%APPDATA%\AutoLEDPro\thu_vien_led.txt`).
+   - **Dùng hình đang chọn làm LED:** vẽ hình LED của riêng bạn, chọn hình đó rồi bấm nút này.
+   - **2. Thông số xếp:**
+     - khoảng cách **tâm bóng** (thường khoảng 35mm với module),
+     - cách mép,
+     - khe tối thiểu giữa 2 LED,
+     - kiểu xếp module: Tự động / Thẳng hàng / So le,
+     - tự nhận chữ đối xứng,
+     - lấp chỗ tối.
+   - **3. Đi dây & đục lỗ:**
+     - vẽ đường đi dây,
+     - số LED tối đa trên một dây,
+     - điện áp nguồn,
+     - tạo lỗ cắt (với LED tròn).
+3. Bấm **RẢI LED**. Máy tạo 3 layer riêng:
+   - **`LED`**: các LED, mỗi chữ là một group tên `LED x <số lượng>`.
+   - **`DAY`**: đường dây. Mỗi dây một màu, điểm vào có nhãn IN1, IN2…, và có đường cấp nguồn từ ô **NGUỒN**.
+   - **`LO_CAT`**: các lỗ tròn để đưa ra máy CNC hoặc laser (khi chọn "Tạo lỗ cắt").
+4. Bảng dưới cửa sổ báo:
+   - số LED,
+   - công suất,
+   - nguồn đề xuất (đã cộng dư 20%),
+   - thành tiền,
+   - số dây.
 
-Macro đặt LED lên một layer riêng tên **`LED`**, mỗi chữ là một group tên `LED x <số lượng>`. Nếu thấy chưa ưng ý, bạn bấm **Ctrl+Z** một lần là bỏ toàn bộ lần rải đó.
+   Bấm **Ctrl+Z** một lần là hủy toàn bộ lần rải.
 
-### Các macro có trong module
+### Các macro khác
 
 | Macro | Chức năng |
 |---|---|
-| `AutoLED_Fill` | Rải LED vào các chữ đang chọn |
-| `AutoLED_Count` | Đếm LED trong vùng chọn. Nếu không chọn gì thì đếm cả layer LED. Kèm công suất và nguồn |
-| `AutoLED_Clear` | Xóa toàn bộ LED trên layer LED của trang hiện tại |
-| `AutoLED_Settings` | Chỉ đổi thông số, không rải LED |
+| `AutoLED` | Mở cửa sổ cấu hình |
+| `AutoLED_RaiNhanh` | Rải ngay bằng thông số đã lưu, không mở cửa sổ |
+| `AutoLED_DemLED` | Đếm LED, tính công suất và báo giá |
+| `AutoLED_XoaLED` | Xóa hết LED, dây và lỗ cắt trên trang |
+| `AutoLED_CaiDat` | Cài hoặc cài lại cửa sổ giao diện |
 
-## Thông số
+## Thư mục trong kho
 
-| Thông số | Ý nghĩa | Mặc định |
-|---|---|---|
-| Chế độ | **1 = Chạy theo nét**: LED chạy theo viền trong của chữ, thành từng vòng (hợp với chữ nét mảnh hoặc vừa). **2 = Lưới**: xếp LED thành hàng ngang, căn giữa trong từng đoạn nét (hợp với chữ to, mặt chữ rộng) | 1 |
-| Loại LED | 1 = LED hạt (tròn), 2 = LED module (chữ nhật, tự xoay theo hướng nét) | 1 |
-| Kích thước | Đường kính LED hạt, hoặc dài × rộng module (mm) | 9 mm |
-| Khoảng cách LED | Khoảng cách giữa tâm 2 LED liền nhau (mm) | 20 |
-| Khoảng cách hàng/vòng | Khoảng cách giữa các hàng (chế độ 2) hoặc giữa các vòng (chế độ 1) | 20 |
-| Cách mép | Khoảng cách từ mép LED tới mép chữ (mm) | 3 |
-| Số vòng tối đa | Số vòng LED nhiều nhất trong một nét (chế độ 1) | 10 |
-| Công suất / Điện áp | Dùng để tính tổng công suất và nguồn | 0.2 W, 5 V |
-
-Macro tự lưu thông số, lần sau mở lên vẫn giữ nguyên.
-
-**Gợi ý thông số hay dùng:**
-- Chữ nổi LED hạt 9 mm: chế độ 1, khoảng cách 15–20 mm, cách mép 3 mm.
-- Hộp đèn module 3 bóng (khoảng 70×15 mm): chế độ 2, loại 2, khoảng cách 80 mm, hàng 60–80 mm.
-
-## Dùng hình LED của riêng bạn
-
-Bạn vẽ một hình LED (ví dụ module có chân dây, hoặc logo LED), rồi đặt tên cho hình đó là **`LED_MAU`** trong *Object Manager* (Window → Dockers → Objects). Khi rải, macro sẽ nhân bản đúng hình đó, tự lấy kích thước của nó, và xoay theo hướng nét ở chế độ 1.
+| Thư mục / file | Nội dung |
+|---|---|
+| `AutoLEDPro.bas` | **File macro để import vào CorelDRAW** |
+| `clsAutoLEDEvt.cls`, `frmAutoLED_code.txt` | Dùng khi cần cài tay |
+| `src/` | Mã nguồn macro, công cụ đóng gói (`build.py`) và công cụ soát lỗi VBA (`vbacheck.py`) |
+| `lab/` | Bộ thử nghiệm bằng Python: cùng thuật toán, có chấm điểm tự động |
+| `ket_qua/` | Ảnh kết quả và bảng điểm của bộ thử nghiệm |
+| `KINH_NGHIEM.md` | 30 quy tắc xếp LED rút ra từ quá trình tự thử |
+| `prototype/` | Các bản thử đầu tiên (lưu lại để tham khảo) |
 
 ## Lưu ý
 
-- Chữ phải là **đường cong kín**. Nét hở (open path) sẽ bị bỏ qua.
-- Ở chế độ 1, nếu một nét chữ quá mảnh không đủ chỗ chạy viền, macro tự chuyển nét đó sang chế độ lưới.
-- Chữ rất to hoặc rất nhiều chữ có thể mất vài giây để chạy.
-- Chữ trong bảng thông báo của macro viết không dấu, để không bị lỗi font trong VBA.
+- Chữ phải là **đường cong kín**.
+- Chữ **đối xứng** (A, H, O, T, V…) chỉ được xếp đối xứng khi mỗi chữ là **một đối tượng riêng**.
+- Máy chủ phát triển không có CorelDRAW, nên macro bản 3 **chưa được chạy trên CorelDRAW thật**. Thuật toán đã được thử kỹ trên bản Python cùng logic (thư mục `lab/`). Nếu macro báo lỗi, bạn chụp màn hình dòng lỗi gửi lại để tôi sửa.

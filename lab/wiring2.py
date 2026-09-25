@@ -91,12 +91,20 @@ def order_chains(chains, leds, feed, inside=None):
     return order
 
 
-def split_wires(order, max_per):
+def split_wires(order, max_per, leds=None, step=None, inside=None):
     N = sum(len(c) for c in order)
     k = max(1, math.ceil(N / max_per))
     target = N / k
     wires, cur = [], []
     for ch in order:
+        # K29: noi qua xa / chay ra ngoai chu -> keo day moi tu nguon
+        if cur and leds is not None:
+            a, b = leds[cur[-1]][:2], leds[ch[0]][:2]
+            far = math.dist(a, b) > 3 * step
+            out = inside is not None and any(not inside(a[0] + (b[0] - a[0]) * q / 8, a[1] + (b[1] - a[1]) * q / 8)
+                                             for q in range(1, 8))
+            if far or out:
+                wires.append(cur); cur = []
         if cur and len(cur) + len(ch) > target * 1.12 and len(wires) < k - 1:
             wires.append(cur); cur = []
         for i in ch:
@@ -132,5 +140,5 @@ def plan(leds, t, step, max_per=20, feed=None, inside=None):
         feed = min((l[:2] for l in leds), key=lambda p: p[1] + 0.5 * p[0])
     chains = build_chains(leds, t, step)
     order = order_chains(chains, leds, feed, inside)
-    wires = split_wires(order, max_per)
+    wires = split_wires(order, max_per, leds, step, inside)
     return wires, wire_paths(wires, leds, t)

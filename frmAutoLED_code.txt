@@ -1,0 +1,13 @@
+Private evs As New Collection
+Public Sub HookCtl(ByVal c As Object, ByVal key As String, ByVal kind As Long)
+    Dim ev As New clsAutoLEDEvt
+    ev.Key = key
+    If kind = 0 Then Set ev.Btn = c Else Set ev.Cbo = c
+    evs.Add ev
+End Sub
+Private Sub UserForm_Initialize()
+    AutoLEDUI_Build Me
+End Sub
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = 0 Then Cancel = True: Me.Hide
+End Sub

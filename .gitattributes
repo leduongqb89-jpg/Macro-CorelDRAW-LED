@@ -1,2 +1,4 @@
-# Luu nguyen file .bas voi xuong dong Windows (CRLF) de VBA Editor import dung
+# Luu nguyen file macro voi xuong dong Windows (CRLF) de VBA Editor import dung
 *.bas -text
+*.cls -text
+frmAutoLED_code.txt -text
