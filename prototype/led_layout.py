@@ -57,6 +57,7 @@ class Layout:
     def __init__(self, poly, cfg):
         self.poly, self.cfg, self.leds = poly, cfg, []
         self.clear = min(cfg.gap, cfg.row_gap)
+        self.tags = []
         self.nodes = [c for ring in [poly.exterior, *poly.interiors] for c in ring.coords]
 
     def inside(self, x, y):                      # = Curve.IsOnCurve(...) = cdrInsideShape
@@ -82,13 +83,14 @@ class Layout:
                 return False
         return True
 
-    def try_add(self, led):
+    def try_add(self, led, idx=0):
         for o in self.leds:
             if sat_overlap(o, led, self.clear):
                 return False
         if not self.fits_shape(led):
             return False
         self.leds.append(led)
+        self.tags.append((getattr(self, "cur_seq", (0, 0)), idx))
         return True
 
     # ---------- Chia duong bao thanh cac doan ----------
@@ -162,11 +164,14 @@ class Layout:
         hl, hw = c.L / 2, c.W / 2
         size_n = c.L if across else c.W        # kich thuoc LED theo chieu ngang net
         nrm = self.normals(pts)
+        step = math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y) if len(pts) > 1 else 1
+        closed = math.hypot(pts[-1].x - pts[0].x, pts[-1].y - pts[0].y) < 2 * step
+        half = max(1, int(round(hl / step)))
         depths = [self.depth(p.x, p.y, v[2], v[3]) for p, v in zip(pts, nrm)]
         med = sorted(depths)[len(depths) // 2]
         rows = {}
         for i, (p, (ux, uy, vx, vy), D) in enumerate(zip(pts, nrm, depths)):
-            if D > med * 1.3:                   # tia xuyen sang net khac (cho giao net)
+            if D > med:                         # tia xuyen sang net khac: giu so cot deu
                 D = med
             avail = D - 2 * m
             if avail < size_n:
@@ -176,10 +181,27 @@ class Layout:
             for k in range(n):
                 off = start + size_n / 2 + k * (size_n + c.row_gap)
                 cx, cy = p.x + vx * off, p.y + vy * off
-                led = (cx, cy, hl, hw, vx, vy) if across else (cx, cy, hl, hw, ux, uy)
+                if across:
+                    led = (cx, cy, hl, hw, vx, vy)
+                else:
+                    # LED doc net: dat theo day cung cua duong chay (om theo net cong)
+                    ia, ib = i - half, i + half
+                    if closed:
+                        ia, ib = ia % len(pts), ib % len(pts)
+                    if 0 <= ia < len(pts) and 0 <= ib < len(pts):
+                        pa, pb = pts[ia], pts[ib]
+                        ax_, ay_ = pa.x + nrm[ia][2] * off, pa.y + nrm[ia][3] * off
+                        bx_, by_ = pb.x + nrm[ib][2] * off, pb.y + nrm[ib][3] * off
+                        dx_, dy_ = bx_ - ax_, by_ - ay_
+                        dd = math.hypot(dx_, dy_) or 1
+                        led = ((ax_ + bx_) / 2, (ay_ + by_) / 2, hl, hw, dx_ / dd, dy_ / dd)
+                    else:
+                        led = (cx, cy, hl, hw, ux, uy)
                 rows.setdefault(k, []).append((i, led))
         phase = None
+        self.run_id = getattr(self, "run_id", 0) + 1
         for k in sorted(rows):
+            self.cur_seq = (self.run_id, k)
             phase = self.place_row(rows[k], ps, phase)
 
     def ok(self, led):
@@ -211,11 +233,12 @@ class Layout:
                         self.try_add(by_idx[i])
             # Doan cong: lap cho trong con lai (doan thang da kin nen khong them gi)
             for i, led in seg:
-                self.try_add(led)
+                self.try_add(led, i)
         return phase
 
     def run(self, mode="auto", fill_gaps=True):
         c = self.cfg
+        self.seq_key = None
         passes = []
         if mode in ("auto", "across"):
             passes.append((True, c.W + c.gap))       # LED nam ngang net
