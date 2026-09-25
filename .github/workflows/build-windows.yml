@@ -1,0 +1,80 @@
+name: Dong goi AutoLED Pro (Windows)
+
+on:
+  push:
+    branches: [claude/coreldraw-led-macro-tcjezr, main, master]
+    paths:
+      - "app/**"
+      - "installer/**"
+      - "AutoLEDPro.bas"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: "1"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cai thu vien
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements-dev.txt
+
+      - name: Thu quy trinh tren CorelDRAW gia lap
+        run: python app/tests/test_pipeline.py
+
+      - name: Dong goi exe (PyInstaller)
+        run: >
+          pyinstaller --noconfirm --clean --windowed --name AutoLEDPro
+          --icon app/assets/autoled.ico
+          --add-data "app/assets/autoled.ico;assets"
+          --paths app
+          --collect-submodules win32com
+          app/run_autoled.py
+
+      - name: Tu kiem tra file exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\AutoLEDPro\AutoLEDPro.exe" -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "$env:TEMP\autoled_selftest.txt"
+          if ($p.ExitCode -ne 0) { throw "Selftest that bai: $($p.ExitCode)" }
+
+      - name: Tao bo cai (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc "installer\AutoLEDPro.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC loi $LASTEXITCODE" }
+          Get-ChildItem dist_installer
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoLEDPro-Setup
+          path: dist_installer/*.exe
+          retention-days: 30
+
+      - name: Dang ban phat hanh thu nghiem
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v3.0.${{ github.run_number }}
+          name: AutoLED Pro 3.0 (ban thu nghiem ${{ github.run_number }})
+          prerelease: true
+          files: dist_installer/*.exe
+          body: |
+            Bo cai AutoLED Pro cho Windows (CorelDRAW 2018 tro len, ban day du).
+            Tai file AutoLEDPro-Setup-*.exe ben duoi, chay de cai dat.

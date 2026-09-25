@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+build/
+dist/
+dist_installer/
+*.spec
+autoled_selftest.txt

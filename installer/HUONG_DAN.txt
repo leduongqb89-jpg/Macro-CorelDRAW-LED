@@ -1,0 +1,24 @@
+﻿AUTOLED PRO 3.0 - RAI LED TU DONG CHO CORELDRAW
+=================================================
+
+CACH DUNG
+1. Mo CorelDRAW (ban day du, 2018 tro len) va file thiet ke.
+2. Mo AutoLED Pro (bieu tuong chu A phat sang ngoai Desktop / Start Menu).
+   Cua so AutoLED Pro luon noi tren cung, dat canh CorelDRAW.
+3. Trong CorelDRAW: chon chu can rai LED (text, curves hoac group; moi chu 1 doi tuong).
+4. Trong AutoLED Pro: chon loai LED, kiem tra thong so, bam RAI LED.
+   - LED nam tren layer "LED", day tren layer "DAY", lo cat tren layer "LO_CAT".
+   - Bam Ctrl+Z trong CorelDRAW 1 lan de huy ca lan rai.
+5. "Dem / Bao gia": dem LED, cong suat, nguon de xuat, thanh tien.
+6. "Dung hinh dang chon lam LED": chon 1 hinh LED tu ve trong CorelDRAW roi bam.
+
+THONG SO QUAN TRONG
+- Khoang cach tam bong: do giua TAM cac bong LED (module thuong ~35mm).
+- Cach mep chu: khoang cach tu mep LED toi mep chu.
+- Xep module: Tu dong / Thang hang / So le.
+
+THU VIEN LED va CAI DAT luu tai: %APPDATA%\AutoLEDPro\
+Neu co loi: gui file %APPDATA%\AutoLEDPro\loi.txt de duoc ho tro.
+
+MACRO VBA (tuy chon): thu muc macro_VBA chua ban macro chay ngay trong CorelDRAW
+(import AutoLEDPro.bas vao GlobalMacros, chay AutoLED_CaiDat).
