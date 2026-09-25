@@ -1,2 +1,2 @@
-# VBA Editor can file .bas dung xuong dong kieu Windows (CRLF)
-*.bas text eol=crlf
+# Luu nguyen file .bas voi xuong dong Windows (CRLF) de VBA Editor import dung
+*.bas -text
